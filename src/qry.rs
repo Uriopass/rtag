@@ -1,5 +1,5 @@
-use crate::write::{get_allmap, getroot};
-use crate::{cnf, parse, TagName, ID};
+use crate::write::{data, get_allmap, get_datamap, getroot, value_from_off};
+use crate::{cnf, parse, TagName, Value, ID};
 use memmap2::Mmap;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::File;
@@ -7,6 +7,7 @@ use std::fs::File;
 pub struct TagCtx {
     mapped_tags: BTreeMap<TagName, Mmap>,
     allmap: Mmap,
+    datamap: Mmap,
 }
 
 #[derive(Clone, Debug)]
@@ -21,6 +22,10 @@ pub enum Expr {
 /// List of ors of ands of tags with boolean = true or false
 #[derive(Debug)]
 pub struct CNF(pub Vec<Vec<(TagName, bool)>>);
+
+fn iter_data<'a>(datamap: &'a [u8]) -> impl Iterator<Item = Value> + 'a {
+    (0..datamap.len() / 256).map(move |off| value_from_off(datamap, off))
+}
 
 fn iter_tagmap<'a>(map: &'a [u8]) -> impl Iterator<Item = ID> + 'a {
     (0..map.len() / 4).map(move |off| ID(read_int(map, off)))
@@ -119,34 +124,36 @@ fn execute_and(ctx: &TagCtx, mut needs: Vec<(TagName, bool)>, limit: usize) -> V
     out
 }
 
-pub fn parse_and_execute(qry: &str, limit: usize) -> Vec<ID> {
+pub fn parse_and_execute(qry: &str, limit: usize) -> Vec<Value> {
     let qry_expr = parse::parse_query(qry);
     let qry_expr = match qry_expr {
         None => {
             let ctx = prepare_tags(&CNF(vec![]));
-            return iter_tagmap(&ctx.allmap).take(limit).collect();
+            return iter_data(&ctx.datamap).take(limit).collect();
         }
         Some(x) => x,
     };
-    eprintln!("expr:    {:?}", qry_expr);
+    if std::env::var("DEBUG").is_ok() {
+        eprintln!("expr:    {:?}", qry_expr);
+    }
     let qry_cnf = cnf::to_cnf(qry_expr);
-    eprintln!("cnf: {:?}", qry_cnf);
-    execute(qry_cnf, limit)
+    if std::env::var("DEBUG").is_ok() {
+        eprintln!("cnf: {:?}", qry_cnf);
+    }
+    execute(qry_cnf, limit).collect()
 }
 
-pub fn execute(cnf: CNF, limit: usize) -> Vec<ID> {
+pub fn execute(cnf: CNF, limit: usize) -> impl Iterator<Item = Value> {
     let ctx = prepare_tags(&cnf);
 
-    eprintln!("total tag size: {}", ctx.allmap.len() / 4);
-
-    let mut ids = vec![];
+    let mut ids: Vec<ID> = vec![];
     for andqry in cnf.0 {
         if ids.len() >= limit {
-            return ids;
+            break;
         }
         ids.extend(execute_and(&ctx, andqry, limit - ids.len()).into_iter());
     }
-    ids
+    ids.into_iter().flat_map(move |id| data(&ctx.datamap, id))
 }
 
 pub fn read_int(map: &[u8], off: usize) -> u32 {
@@ -179,11 +186,13 @@ fn prepare_tags(cnf: &CNF) -> TagCtx {
     }
 
     let mut rootpath = getroot();
-    let allmmap = get_allmap(&mut rootpath);
+    let allmap = get_allmap(&mut rootpath);
+    let (datamap, _) = get_datamap(&mut rootpath);
 
     let mut ctx = TagCtx {
         mapped_tags: BTreeMap::new(),
-        allmap: allmmap,
+        allmap,
+        datamap,
     };
 
     for tag in uniq_tags {

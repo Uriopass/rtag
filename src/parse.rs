@@ -165,8 +165,12 @@ fn rpn_to_expr(tokens: Vec<Token>) -> Option<Expr> {
 
 pub fn parse_query(v: &str) -> Option<Expr> {
     let mut lexems = lexer(v);
-    println!("lexems:  {:?}", lexems);
+    if std::env::var("DEBUG").is_ok() {
+        println!("lexems:  {:?}", lexems);
+    }
     lexems = shunting_yard(lexems);
-    println!("shunted: {:?}", lexems);
+    if std::env::var("DEBUG").is_ok() {
+        println!("shunted: {:?}", lexems);
+    }
     rpn_to_expr(lexems)
 }

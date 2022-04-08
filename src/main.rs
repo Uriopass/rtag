@@ -43,8 +43,8 @@ fn main() {
 
     match cli.command {
         Commands::Qry { qry } => {
-            for id in qry::parse_and_execute(&qry, 100) {
-                println!("{}", id.0);
+            for val in qry::parse_and_execute(&qry, 100) {
+                println!("{}", val.0);
             }
         }
         Commands::Set { tag, values } => {

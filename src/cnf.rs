@@ -70,8 +70,12 @@ pub fn to_cnf(expr: Expr) -> CNF {
     }
 
     let lowered = lower_negs(expr);
-    eprintln!("lowered: {:?}", lowered);
+    if std::env::var("DEBUG").is_ok() {
+        eprintln!("lowered: {:?}", lowered);
+    }
     let cnf_expr = to_cnf_inner(lowered);
-    eprintln!("cnf_expr: {:?}", cnf_expr);
+    if std::env::var("DEBUG").is_ok() {
+        eprintln!("cnf_expr: {:?}", cnf_expr);
+    }
     cnf_flatten(cnf_expr)
 }

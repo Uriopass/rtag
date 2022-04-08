@@ -1,10 +1,11 @@
 use crate::qry::{find, read_int, write_int};
 use crate::{TagName, Value, ID};
 use memmap2::Mmap;
-use std::cmp::Ordering;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
+
+pub const MAX_VALUE_LENGTH: usize = 251;
 
 pub fn getroot() -> PathBuf {
     let home = std::env::var("HOME").expect("HOME is not defined in env");
@@ -30,49 +31,77 @@ pub fn get_allmap(root: &mut PathBuf) -> Mmap {
     unsafe { memmap2::Mmap::map(&allfile).expect("could not memmap all file") }
 }
 
-pub fn search_data(data: &[u8], needle: &[u8]) -> Option<usize> {
+pub fn value_from_off(datamap: &[u8], off: usize) -> Value {
+    let bytes = &datamap[off * 256..off * 256 + MAX_VALUE_LENGTH + 1];
+    let len = bytes[0] as usize;
+    Value(
+        String::from_utf8(bytes[1..len + 1].iter().copied().collect()).expect("data is corrupted"),
+    )
+}
+
+// Finds the ID with a corresponding data if it exists
+pub fn data(datamap: &[u8], needle: ID) -> Option<Value> {
     let mut left = 0;
-    let mut right = data.len() / 256;
+    let mut right = datamap.len() / 256;
     while left < right {
         let middle = (left + right) / 2;
-        let v = &data[middle * 256..middle * 256 + 252];
-        match v.cmp(needle) {
-            Ordering::Equal => return Some(middle),
-            Ordering::Greater => right = middle,
-            Ordering::Less => left = middle + 1,
+        let v = read_int(datamap, middle * 64 + 63);
+        if v == needle.0 {
+            return Some(value_from_off(datamap, middle));
+        }
+        if v > needle.0 {
+            right = middle;
+        } else {
+            left = middle + 1;
         }
     }
     None
 }
 
-pub fn insert_data(root: &mut PathBuf, value: Value) -> (ID, bool) {
+// Finds the ID with a corresponding data if it exists
+pub fn search_data(data: &[u8], needle: &[u8]) -> Option<ID> {
+    assert_eq!(needle.len(), MAX_VALUE_LENGTH + 1);
+
+    for i in 0..data.len() / 256 {
+        let v = &data[i * 256..i * 256 + MAX_VALUE_LENGTH + 1];
+        if v == needle {
+            return Some(ID(read_int(data, i * 64 + 63)));
+        }
+    }
+    None
+}
+
+pub fn get_datamap(root: &mut PathBuf) -> (Mmap, File) {
     root.push("data");
-    let mut datafile = File::options()
+    let datafile = File::options()
         .create(true)
         .write(true)
         .read(true)
         .open(&root)
-        .expect("could not open allfile");
+        .expect("could not open datafile");
     root.pop();
 
-    let data = unsafe {
-        memmap2::Mmap::map(&datafile)
-            .expect("could not memmap all file")
-            .make_mut()
-            .expect("cannot make mut map")
-    };
+    (
+        unsafe { memmap2::Mmap::map(&datafile).expect("could not memmap data file") },
+        datafile,
+    )
+}
+
+pub fn insert_data(root: &mut PathBuf, value: Value) -> (ID, bool) {
+    let (data, mut datafile) = get_datamap(root);
+    let data = data.make_mut().expect("could not make mat mup");
 
     if data.len() % 256 != 0 {
         panic!("data is corrupted")
     }
-
-    let mut bytes = value.0.into_bytes();
-    if bytes.len() > 252 {
-        panic!("value too long: max is 252 bytes")
+    if value.0.len() > MAX_VALUE_LENGTH {
+        panic!("value too long: max is {} bytes", MAX_VALUE_LENGTH)
     }
-    bytes.extend((0..252 - bytes.len()).map(|_| 0));
-    if let Some(off) = search_data(&data, &bytes) {
-        return (ID(read_int(&data, off * 64 + 63)), false);
+    let mut bytes = vec![value.0.len() as u8];
+    bytes.extend(value.0.bytes());
+    bytes.extend((0..MAX_VALUE_LENGTH + 1 - bytes.len()).map(|_| 0));
+    if let Some(id) = search_data(&data, &bytes) {
+        return (id, false);
     }
 
     let newid = if data.len() == 0 {
