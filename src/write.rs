@@ -19,7 +19,7 @@ pub fn getroot() -> PathBuf {
 }
 
 pub fn get_allmap(root: &mut PathBuf) -> Mmap {
-    root.push("all");
+    root.push("__all");
     let allfile = File::options()
         .create(true)
         .write(true)
@@ -72,7 +72,7 @@ pub fn search_data(data: &[u8], needle: &[u8]) -> Option<ID> {
 }
 
 pub fn get_datamap(root: &mut PathBuf) -> (Mmap, File) {
-    root.push("data");
+    root.push("__data");
     let datafile = File::options()
         .create(true)
         .write(true)
@@ -87,14 +87,14 @@ pub fn get_datamap(root: &mut PathBuf) -> (Mmap, File) {
     )
 }
 
-fn prepare_data_needle(value: Value) -> Vec<u8> {
+fn prepare_data_needle(value: &Value) -> Vec<u8> {
     let mut bytes = vec![value.0.len() as u8];
     bytes.extend(value.0.bytes());
     bytes.extend((0..MAX_VALUE_LENGTH + 1 - bytes.len()).map(|_| 0));
     bytes
 }
 
-pub fn insert_data(root: &mut PathBuf, value: Value) -> (ID, bool) {
+pub fn insert_data(root: &mut PathBuf, value: &Value) -> (ID, bool) {
     let (data, mut datafile) = get_datamap(root);
     let data = data.make_mut().expect("could not make mat mup");
 
@@ -209,18 +209,18 @@ pub fn remove_tag_from_map(root: &mut PathBuf, name: &str, id: ID) {
         .expect("could not truncate tagmap");
 }
 
-pub fn add_tag(tag: &TagName, value: Value) {
+pub fn add_tag(tag: &TagName, value: &Value) {
     let mut root = getroot();
 
-    let (dataid, inserted) = insert_data(&mut root, value);
+    let (dataid, inserted) = insert_data(&mut root, &value);
 
     if inserted {
-        insert_tag_in_map(&mut root, "all", dataid);
+        insert_tag_in_map(&mut root, "__all", dataid);
     }
     insert_tag_in_map(&mut root, &tag.0, dataid);
 }
 
-pub fn del_tag(tag: &TagName, value: Value) {
+pub fn del_tag(tag: &TagName, value: &Value) {
     if value.0.len() > MAX_VALUE_LENGTH {
         panic!("value too big");
     }

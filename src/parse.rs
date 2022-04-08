@@ -80,6 +80,20 @@ fn shunting_yard(toks: Vec<Token>) -> Vec<Token> {
             Op(Oper::Union) | Op(Oper::Intersect) | ParRight => {}
             Ident(_) | ParLeft | Op(Oper::Neg) => {
                 if lastwasident {
+                    while opstack
+                        .last()
+                        .and_then(|x| {
+                            if let Op(op) = *x {
+                                Some(precedence(op))
+                            } else {
+                                None
+                            }
+                        })
+                        .unwrap_or(u8::MIN)
+                        >= precedence(Oper::Intersect)
+                    {
+                        out.push(opstack.pop().unwrap());
+                    }
                     opstack.push(Token::Op(Oper::Intersect));
                 }
             }

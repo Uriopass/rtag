@@ -3,7 +3,7 @@ mod parse;
 mod qry;
 mod write;
 
-use crate::write::{add_tag, del_tag};
+use crate::write::{add_tag, del_tag, getroot};
 use clap::{Parser, Subcommand};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -36,8 +36,12 @@ enum Commands {
     Set { tag: String, values: Vec<String> },
     /// Remove tag from values
     Del { tag: String, values: Vec<String> },
+    /// Clean remove all tags and everything
+    Clean {},
     /// Generate test data
     GenTestData { dataset: Option<u32> },
+    /// List all tags
+    Tags {},
 }
 
 fn cli() -> Cli {
@@ -56,25 +60,65 @@ fn main() {
         Commands::Set { tag, values } => {
             let tag = TagName(tag);
             for val in values {
-                add_tag(&tag, Value(val));
+                add_tag(&tag, &Value(val));
             }
         }
         Commands::Del { tag, values } => {
             let tag = TagName(tag);
             for val in values {
-                del_tag(&tag, Value(val));
+                del_tag(&tag, &Value(val));
             }
         }
-        Commands::GenTestData { .. } => {
-            for musique in 0..30000 {
-                let mut st = DefaultHasher::new();
-                musique.hash(&mut st);
-                let artiste = st.finish() % 1500;
+        Commands::Clean {} => {
+            let root = getroot();
+            std::fs::remove_dir_all(root).expect("failed cleaning");
+        }
+        Commands::Tags {} => {
+            let root = getroot();
+            for file in std::fs::read_dir(&root)
+                .expect("cannot read root")
+                .flat_map(|x| x.ok())
+            {
+                let fname = file.file_name();
+                let name = fname.to_string_lossy();
+                if name == "__all" || name == "__data" {
+                    continue;
+                }
+                println!("{}", name);
+            }
+            std::fs::remove_dir_all(root).expect("failed cleaning");
+        }
+        Commands::GenTestData { dataset } => match dataset {
+            Some(2) => {
+                println!("generating dataset: 50k items  10 tags  [1-10] items per tag");
+                for musique in 0..50000 {
+                    let mustag = Value(format!("m_{}", musique));
+                    let mut st = DefaultHasher::new();
+                    musique.hash(&mut st);
+                    let n_items = st.finish() % 10;
+                    for i in 0..n_items {
+                        let mut st = DefaultHasher::new();
+                        musique.hash(&mut st);
+                        (i + 1).hash(&mut st);
+                        let artiste = st.finish() % 10;
 
-                let mustag = format!("m_{}", musique);
-                let artag = format!("a_{}", artiste);
-                add_tag(&TagName(artag), Value(mustag));
+                        let artag = format!("a_{}", artiste);
+                        add_tag(&TagName(artag), &mustag);
+                    }
+                }
             }
-        }
+            _ => {
+                println!("generating dataset: 50k items 2000 tags 1 item per tag");
+                for musique in 0..50000 {
+                    let mut st = DefaultHasher::new();
+                    musique.hash(&mut st);
+                    let artiste = st.finish() % 2000;
+
+                    let mustag = format!("m_{}", musique);
+                    let artag = format!("a_{}", artiste);
+                    add_tag(&TagName(artag), &Value(mustag));
+                }
+            }
+        },
     }
 }

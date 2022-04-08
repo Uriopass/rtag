@@ -24,7 +24,7 @@ pub fn to_dnf(expr: Expr) -> DNF {
                 _ => unreachable!("NOTs should be lowered"),
             },
             Or(l, r) => Or(Box::new(to_dnf_inner(*l)), Box::new(to_dnf_inner(*r))),
-            And(l, r) => match (*l, *r) {
+            And(l, r) => match (to_dnf_inner(*l), to_dnf_inner(*r)) {
                 (Or(l1, l2), v) | (v, Or(l1, l2)) => Or(
                     Box::new(to_dnf_inner(And(l1, Box::new(v.clone())))),
                     Box::new(to_dnf_inner(And(l2, Box::new(v)))),
