@@ -49,6 +49,7 @@ fn lexer(v: &str) -> Vec<Token> {
             Some(')') => ParRight,
             Some('-') => Op(Neg),
             Some('!') => Op(Neg),
+            Some('~') => Op(Neg),
             Some('&') => Op(Intersect),
             Some('|') => Op(Union),
             Some('+') => Op(Union),

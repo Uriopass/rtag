@@ -1,9 +1,8 @@
+use crate::write::{get_allmap, getroot};
 use crate::{cnf, parse, TagName, ID};
 use memmap2::Mmap;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::File;
-use std::io::{Seek, SeekFrom, Write};
-use std::path::PathBuf;
 
 pub struct TagCtx {
     mapped_tags: BTreeMap<TagName, Mmap>,
@@ -31,7 +30,7 @@ fn iter_tagmap_negall<'a>(allmap: &'a [u8], map: &'a [u8]) -> impl Iterator<Item
     iter_tagmap(allmap).filter(|x| !find(map, *x))
 }
 
-fn find(map: &[u8], needle: ID) -> bool {
+pub fn find(map: &[u8], needle: ID) -> bool {
     let mut left = 0;
     let mut right = map.len() / 4;
     while left < right {
@@ -141,7 +140,7 @@ pub fn execute(cnf: CNF, limit: usize) -> Vec<ID> {
     ids
 }
 
-fn read_int(map: &[u8], off: usize) -> u32 {
+pub fn read_int(map: &[u8], off: usize) -> u32 {
     unsafe {
         u32::from_le_bytes([
             *map.get_unchecked(off * 4),
@@ -152,7 +151,7 @@ fn read_int(map: &[u8], off: usize) -> u32 {
     }
 }
 
-fn write_int(map: &mut [u8], off: usize, v: u32) {
+pub fn write_int(map: &mut [u8], off: usize, v: u32) {
     unsafe {
         let bytes = u32::to_le_bytes(v);
         *map.get_unchecked_mut(off * 4 + 0) = *bytes.get_unchecked(0);
@@ -170,34 +169,8 @@ fn prepare_tags(cnf: &CNF) -> TagCtx {
         }
     }
 
-    let home = std::env::var("HOME").expect("HOME is not defined in env");
-
-    let mut rootpath = PathBuf::from(home);
-    rootpath.push(".rtag/");
-
-    std::fs::create_dir_all(&rootpath)
-        .expect(&*format!("failed creating rtag dir at {:?}", &rootpath));
-
-    rootpath.push("all");
-    let mut allfile = File::options()
-        .create(true)
-        .write(true)
-        .read(true)
-        .open(&rootpath)
-        .expect("could not open allfile");
-    rootpath.pop();
-
-    if allfile
-        .metadata()
-        .expect("cannot get metadata for allfile")
-        .len()
-        < 4
-    {
-        allfile.seek(SeekFrom::Start(0)).unwrap();
-        allfile.write_all(&[0, 0, 0, 0]).unwrap();
-    }
-
-    let allmmap = unsafe { memmap2::Mmap::map(&allfile).expect("could not memmap all file") };
+    let mut rootpath = getroot();
+    let allmmap = get_allmap(&mut rootpath);
 
     let mut ctx = TagCtx {
         mapped_tags: BTreeMap::new(),
