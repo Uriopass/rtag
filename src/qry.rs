@@ -59,15 +59,24 @@ fn execute_and(ctx: &TagCtx, mut needs: Vec<(TagName, bool)>, limit: usize) -> V
         }
     }
 
-    let maps: Option<Vec<_>> = needs
-        .into_iter()
-        .map(|(tag, val)| ctx.mapped_tags.get(&tag).zip(Some(val)))
-        .collect();
+    let mut maps = Vec::with_capacity(needs.len());
+    for (tag, val) in needs {
+        let map = ctx.mapped_tags.get(&tag);
+        match map {
+            None => {
+                if val {
+                    return vec![];
+                } else {
+                    continue;
+                }
+            }
+            Some(m) => maps.push((m, val)),
+        }
+    }
 
-    if maps.is_none() {
+    if maps.is_empty() {
         return vec![];
     }
-    let mut maps = maps.unwrap();
 
     let allsize = ctx.allmap.len() / 4;
     let (i, _) = maps
