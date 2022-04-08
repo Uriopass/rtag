@@ -86,7 +86,6 @@ fn main() {
                 }
                 println!("{}", name);
             }
-            std::fs::remove_dir_all(root).expect("failed cleaning");
         }
         Commands::GenTestData { dataset } => match dataset {
             Some(2) => {
