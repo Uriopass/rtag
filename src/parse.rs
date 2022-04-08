@@ -31,7 +31,7 @@ fn lexer(v: &str) -> Vec<Token> {
     fn parse_ident(first: char, c: &mut Chars) -> (Option<char>, String) {
         let mut chars = vec![first];
         for v in c {
-            if v.is_alphanumeric() {
+            if v.is_alphanumeric() || v == '_' || v == '-' || v == '/' {
                 chars.push(v);
             } else {
                 return (Some(v), chars.into_iter().collect());
@@ -47,7 +47,6 @@ fn lexer(v: &str) -> Vec<Token> {
         let tok = match nexttok {
             Some('(') => ParLeft,
             Some(')') => ParRight,
-            Some('-') => Op(Neg),
             Some('!') => Op(Neg),
             Some('~') => Op(Neg),
             Some('&') => Op(Intersect),

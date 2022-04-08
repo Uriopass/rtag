@@ -1,6 +1,6 @@
-use crate::{qry::Expr, qry::CNF, TagName};
+use crate::{qry::Expr, qry::DNF, TagName};
 
-pub fn to_cnf(expr: Expr) -> CNF {
+pub fn to_dnf(expr: Expr) -> DNF {
     use Expr::*;
     fn lower_negs(expr: Expr) -> Expr {
         match expr {
@@ -16,25 +16,25 @@ pub fn to_cnf(expr: Expr) -> CNF {
         }
     }
 
-    fn to_cnf_inner(expr: Expr) -> Expr {
+    fn to_dnf_inner(expr: Expr) -> Expr {
         match expr {
             e @ Tag(_) => e,
             Not(v) => match *v {
                 Tag(_) => Not(v),
                 _ => unreachable!("NOTs should be lowered"),
             },
-            Or(l, r) => Or(Box::new(to_cnf_inner(*l)), Box::new(to_cnf_inner(*r))),
+            Or(l, r) => Or(Box::new(to_dnf_inner(*l)), Box::new(to_dnf_inner(*r))),
             And(l, r) => match (*l, *r) {
                 (Or(l1, l2), v) | (v, Or(l1, l2)) => Or(
-                    Box::new(to_cnf_inner(And(l1, Box::new(v.clone())))),
-                    Box::new(to_cnf_inner(And(l2, Box::new(v)))),
+                    Box::new(to_dnf_inner(And(l1, Box::new(v.clone())))),
+                    Box::new(to_dnf_inner(And(l2, Box::new(v)))),
                 ),
                 (a, b) => And(Box::new(a), Box::new(b)),
             },
         }
     }
 
-    fn cnf_flatten(expr: Expr) -> CNF {
+    fn dnf_flatten(expr: Expr) -> DNF {
         fn collect_ands(expr: Expr, v: &mut Vec<(TagName, bool)>) {
             match expr {
                 Tag(x) => v.push((x, true)),
@@ -50,7 +50,7 @@ pub fn to_cnf(expr: Expr) -> CNF {
             }
         }
 
-        fn collect_ors(expr: Expr, cnf: &mut CNF) {
+        fn collect_ors(expr: Expr, cnf: &mut DNF) {
             match expr {
                 Or(l, r) => {
                     collect_ors(*l, cnf);
@@ -64,7 +64,7 @@ pub fn to_cnf(expr: Expr) -> CNF {
             }
         }
 
-        let mut emptycnf = CNF(vec![]);
+        let mut emptycnf = DNF(vec![]);
         collect_ors(expr, &mut emptycnf);
         emptycnf
     }
@@ -73,9 +73,9 @@ pub fn to_cnf(expr: Expr) -> CNF {
     if std::env::var("DEBUG").is_ok() {
         eprintln!("lowered: {:?}", lowered);
     }
-    let cnf_expr = to_cnf_inner(lowered);
+    let dnf_expr = to_dnf_inner(lowered);
     if std::env::var("DEBUG").is_ok() {
-        eprintln!("cnf_expr: {:?}", cnf_expr);
+        eprintln!("dnf_expr: {:?}", dnf_expr);
     }
-    cnf_flatten(cnf_expr)
+    dnf_flatten(dnf_expr)
 }

@@ -1,5 +1,5 @@
 use crate::write::{data, get_allmap, get_datamap, getroot, value_from_off};
-use crate::{cnf, parse, TagName, Value, ID};
+use crate::{dnf, parse, TagName, Value, ID};
 use memmap2::Mmap;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::File;
@@ -18,10 +18,10 @@ pub enum Expr {
     Not(Box<Expr>),
 }
 
-/// Conjunctive normal form
+/// Disjunctive normal form
 /// List of ors of ands of tags with boolean = true or false
 #[derive(Debug)]
-pub struct CNF(pub Vec<Vec<(TagName, bool)>>);
+pub struct DNF(pub Vec<Vec<(TagName, bool)>>);
 
 fn iter_data<'a>(datamap: &'a [u8]) -> impl Iterator<Item = Value> + 'a {
     (0..datamap.len() / 256).map(move |off| value_from_off(datamap, off))
@@ -128,7 +128,7 @@ pub fn parse_and_execute(qry: &str, limit: usize) -> Vec<Value> {
     let qry_expr = parse::parse_query(qry);
     let qry_expr = match qry_expr {
         None => {
-            let ctx = prepare_tags(&CNF(vec![]));
+            let ctx = prepare_tags(&DNF(vec![]));
             return iter_data(&ctx.datamap).take(limit).collect();
         }
         Some(x) => x,
@@ -136,14 +136,14 @@ pub fn parse_and_execute(qry: &str, limit: usize) -> Vec<Value> {
     if std::env::var("DEBUG").is_ok() {
         eprintln!("expr:    {:?}", qry_expr);
     }
-    let qry_cnf = cnf::to_cnf(qry_expr);
+    let qry_cnf = dnf::to_dnf(qry_expr);
     if std::env::var("DEBUG").is_ok() {
         eprintln!("cnf: {:?}", qry_cnf);
     }
     execute(qry_cnf, limit).collect()
 }
 
-pub fn execute(cnf: CNF, limit: usize) -> impl Iterator<Item = Value> {
+pub fn execute(cnf: DNF, limit: usize) -> impl Iterator<Item = Value> {
     let ctx = prepare_tags(&cnf);
 
     let mut ids: Vec<ID> = vec![];
@@ -177,7 +177,7 @@ pub fn write_int(map: &mut [u8], off: usize, v: u32) {
     }
 }
 
-fn prepare_tags(cnf: &CNF) -> TagCtx {
+fn prepare_tags(cnf: &DNF) -> TagCtx {
     let mut uniq_tags = BTreeSet::new();
     for or in &cnf.0 {
         for and in or {

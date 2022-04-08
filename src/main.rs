@@ -1,10 +1,12 @@
-mod cnf;
+mod dnf;
 mod parse;
 mod qry;
 mod write;
 
 use crate::write::{add_tag, del_tag};
 use clap::{Parser, Subcommand};
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 #[repr(transparent)]
@@ -34,6 +36,8 @@ enum Commands {
     Set { tag: String, values: Vec<String> },
     /// Remove tag from values
     Del { tag: String, values: Vec<String> },
+    /// Generate test data
+    GenTestData { dataset: Option<u32> },
 }
 
 fn cli() -> Cli {
@@ -59,6 +63,17 @@ fn main() {
             let tag = TagName(tag);
             for val in values {
                 del_tag(&tag, Value(val));
+            }
+        }
+        Commands::GenTestData { .. } => {
+            for musique in 0..30000 {
+                let mut st = DefaultHasher::new();
+                musique.hash(&mut st);
+                let artiste = st.finish() % 1500;
+
+                let mustag = format!("m_{}", musique);
+                let artag = format!("a_{}", artiste);
+                add_tag(&TagName(artag), Value(mustag));
             }
         }
     }
