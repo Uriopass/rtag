@@ -87,6 +87,13 @@ pub fn get_datamap(root: &mut PathBuf) -> (Mmap, File) {
     )
 }
 
+fn prepare_data_needle(value: Value) -> Vec<u8> {
+    let mut bytes = vec![value.0.len() as u8];
+    bytes.extend(value.0.bytes());
+    bytes.extend((0..MAX_VALUE_LENGTH + 1 - bytes.len()).map(|_| 0));
+    bytes
+}
+
 pub fn insert_data(root: &mut PathBuf, value: Value) -> (ID, bool) {
     let (data, mut datafile) = get_datamap(root);
     let data = data.make_mut().expect("could not make mat mup");
@@ -97,9 +104,7 @@ pub fn insert_data(root: &mut PathBuf, value: Value) -> (ID, bool) {
     if value.0.len() > MAX_VALUE_LENGTH {
         panic!("value too long: max is {} bytes", MAX_VALUE_LENGTH)
     }
-    let mut bytes = vec![value.0.len() as u8];
-    bytes.extend(value.0.bytes());
-    bytes.extend((0..MAX_VALUE_LENGTH + 1 - bytes.len()).map(|_| 0));
+    let mut bytes = prepare_data_needle(value);
     if let Some(id) = search_data(&data, &bytes) {
         return (id, false);
     }
@@ -158,6 +163,52 @@ pub fn insert_tag_in_map(root: &mut PathBuf, name: &str, id: ID) {
     file.write_all(&data).expect("could not write");
 }
 
+pub fn remove_tag_from_map(root: &mut PathBuf, name: &str, id: ID) {
+    root.push(name);
+    let mut file = File::options()
+        .create(true)
+        .write(true)
+        .read(true)
+        .open(&root)
+        .expect("could not open allfile");
+    root.pop();
+
+    {
+        let map = unsafe { memmap2::Mmap::map(&file).expect("could not memmap all file") };
+
+        if !find(&map, id) {
+            return;
+        }
+    }
+
+    let mut data = vec![];
+    file.read_to_end(&mut data).expect("could not read file");
+    let mut i = 0;
+    while i < data.len() / 4 {
+        let v = read_int(&data, i);
+        if v < id.0 {
+            i += 1;
+            continue;
+        }
+        if v == id.0 {
+            break;
+        }
+    }
+    while i < data.len() / 4 {
+        let v = read_int(&data, i + 1);
+        write_int(&mut data, i, v);
+        i += 1;
+    }
+    if data.len() <= 4 {
+        root.push(name);
+        std::fs::remove_file(&root).expect("could not delete tagmap");
+        root.pop();
+        return;
+    }
+    file.set_len((data.len() - 4) as u64)
+        .expect("could not truncate tagmap");
+}
+
 pub fn add_tag(tag: &TagName, value: Value) {
     let mut root = getroot();
 
@@ -167,4 +218,19 @@ pub fn add_tag(tag: &TagName, value: Value) {
         insert_tag_in_map(&mut root, "all", dataid);
     }
     insert_tag_in_map(&mut root, &tag.0, dataid);
+}
+
+pub fn del_tag(tag: &TagName, value: Value) {
+    if value.0.len() > MAX_VALUE_LENGTH {
+        panic!("value too big");
+    }
+    let mut root = getroot();
+
+    let (datamap, _) = get_datamap(&mut root);
+    let needle = prepare_data_needle(value);
+
+    let id = search_data(&datamap, &needle);
+    let id = if let Some(x) = id { x } else { return };
+
+    remove_tag_from_map(&mut root, &tag.0, id);
 }

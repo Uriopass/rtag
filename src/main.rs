@@ -3,7 +3,7 @@ mod parse;
 mod qry;
 mod write;
 
-use crate::write::add_tag;
+use crate::write::{add_tag, del_tag};
 use clap::{Parser, Subcommand};
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
@@ -32,6 +32,8 @@ enum Commands {
     Qry { qry: String },
     /// Sets tag to values
     Set { tag: String, values: Vec<String> },
+    /// Remove tag from values
+    Del { tag: String, values: Vec<String> },
 }
 
 fn cli() -> Cli {
@@ -51,6 +53,12 @@ fn main() {
             let tag = TagName(tag);
             for val in values {
                 add_tag(&tag, Value(val));
+            }
+        }
+        Commands::Del { tag, values } => {
+            let tag = TagName(tag);
+            for val in values {
+                del_tag(&tag, Value(val));
             }
         }
     }
