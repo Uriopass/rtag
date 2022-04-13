@@ -1,7 +1,7 @@
 use crate::write::{data, get_allmap, get_datamap, getroot, value_from_off};
 use crate::{dnf, parse, TagName, Value, ID};
 use memmap2::Mmap;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fs::File;
 
 pub struct TagCtx {
@@ -146,7 +146,7 @@ pub fn parse_and_execute(qry: &str, limit: usize) -> Vec<Value> {
 pub fn execute(cnf: DNF, limit: usize) -> impl Iterator<Item = Value> {
     let ctx = prepare_tags(&cnf);
 
-    let mut ids: Vec<ID> = vec![];
+    let mut ids: BTreeSet<ID> = Default::default();
     for andqry in cnf.0 {
         if ids.len() >= limit {
             break;
