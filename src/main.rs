@@ -31,7 +31,13 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Queries the values from a tag query
-    Qry { limit: Option<usize>, qry: String },
+    Qry {
+        /// Number of matches to fetch at most
+        #[clap(short, long, default_value_t = 100)]
+        limit: usize,
+        /// Multiple queries are ANDed together
+        qry: Vec<String>,
+    },
     /// Sets tag to values
     Set { tag: String, values: Vec<String> },
     /// Remove tag from values
@@ -52,12 +58,11 @@ fn main() {
     let cli = cli();
 
     match cli.command {
-        Commands::Qry { limit, qry } => {
-            let mut limit = limit.unwrap_or(100);
+        Commands::Qry { mut limit, qry } => {
             if limit == 0 {
                 limit = usize::MAX;
             }
-            for val in qry::parse_and_execute(&qry, limit) {
+            for val in qry::parse_and_execute(&qry.join(" "), limit) {
                 println!("{}", val.0);
             }
         }
